@@ -137,13 +137,13 @@ function MainApp() {
   }
 
   return (
-    <>
+    <div className='px-4 sm:px-0'>
       <Profile />
       <main className="h-screen my-8 flex flex-col sm:flex-row sm:gap-8">
         <ProjectSidebar onStartAddProject={handleStartAddProject} projects={projectsState.projects} onSelectProject={handleSelectProject} selectedProjectId={projectsState.seletedProjectId} />
         {content}
       </main>
-    </>
+    </div>
   );
 }
 
