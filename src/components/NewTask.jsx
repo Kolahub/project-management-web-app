@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function NewTask({ onAdd }) {
+function NewTask({ onAdd , id}) {
 const [enteredTask, setEnteredTask] = useState('')
 const [err, setErr] = useState(false)
 
@@ -24,7 +24,9 @@ function handleClick () {
         }, 3000)
         return
     }
-    onAdd(enteredTask)
+    // console.log(id, '😂👸📚');
+    // const id = project.id
+    onAdd(enteredTask, id)
     setEnteredTask('')
 }
 
