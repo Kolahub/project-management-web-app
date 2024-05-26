@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
 import Profile from './Profile.jsx';
@@ -7,16 +7,96 @@ import NewProject from './NewProject.jsx';
 import NoProjectSeleted from './NoProjectSeleted.jsx';
 import ProjectSidebar from './ProjectSidebar.jsx';
 import SelectedProject from './SelectedProject.jsx';
+import { ProjectsContext } from '../store/ProjectContext.jsx';
+
+function projectsReducer(state, action) {
+  if (action.type === 'UPDATE_PROJECTS') {
+    return action.payload;
+  }
+
+  if (action.type === 'SELECT_PROJECT') {
+    return {
+      ...state,
+      seletedProjectId: action.payload,
+    };
+  }
+
+  if (action.type === 'DELETE_SELECT_PROJECT') {
+    const updatedProjects = state.projects.filter(project => project.id !== state.seletedProjectId);
+    const newState = {
+      ...state,
+      seletedProjectId: 0,
+      projects: updatedProjects,
+    };
+    return newState;
+  }
+
+  if (action.type === 'ADD_PROJECT') {
+    const projectId = uuidv4();
+    const newProject = {
+      ...action.payload,
+      id: projectId,
+      tasks: [], // Ensure tasks array is initialized
+    };
+    const newState = {
+      ...state,
+      seletedProjectId: 0, // Select the newly added project
+      projects: [...state.projects, newProject],
+    };
+    return newState;
+  }
+
+  if (action.type === 'CANCEL_ADD_PROJECT') {
+    return {
+      ...state,
+      seletedProjectId: 0,
+    };
+  }
+
+  if (action.type === 'START_ADD_PROJECT') {
+    return {
+      ...state,
+      seletedProjectId: null,
+    };
+  }
+
+  if (action.type === 'ADD_TASK') {
+    const updatedProjects = state.projects.map(item =>
+      item.id === action.payload.id
+        ? {
+            ...item,
+            tasks: [{ text: action.payload.text, id: uuidv4() }, ...item.tasks],
+          }
+        : item
+    );
+    return { ...state, projects: updatedProjects };
+  }
+
+  if (action.type === 'DELETE_TASK') {
+    const updatedProjects = state.projects.map(item =>
+      item.id === action.payload.projectId
+        ? {
+            ...item,
+            tasks: item.tasks.filter(task => task.id !== action.payload.task),
+          }
+        : item
+    );
+    return { ...state, projects: updatedProjects };
+  }
+
+  return state;
+}
 
 function MainApp() {
   const auth = getAuth();
   const db = getFirestore();
 
-  const [projectsState, setProjectsState] = useState({
+  const [projectsReducerState, projectsReducerDispatch] = useReducer(projectsReducer, {
     seletedProjectId: 0,
     projects: [],
-    tasks: [],
   });
+
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, user => {
@@ -25,7 +105,11 @@ function MainApp() {
         const unsubscribeSnapshot = onSnapshot(userInfoRef, snapshot => {
           const userData = snapshot.data();
           if (userData) {
-            setProjectsState(userData.projectsState);
+            projectsReducerDispatch({
+              type: 'UPDATE_PROJECTS',
+              payload: userData.projectsState,
+            });
+            setLoaded(true);
           }
         });
         return unsubscribeSnapshot;
@@ -37,10 +121,10 @@ function MainApp() {
   }, [auth, db]);
 
   useEffect(() => {
-    if (projectsState.seletedProjectId !== 0) {
-      update(projectsState);
+    if (loaded) {
+      update(projectsReducerState);
     }
-  }, [projectsState]);
+  }, [projectsReducerState]);
 
   async function update(obj) {
     const user = auth.currentUser;
@@ -53,97 +137,97 @@ function MainApp() {
   }
 
   function handleSelectProject(id) {
-    setProjectsState(prevState => ({
-      ...prevState,
-      seletedProjectId: id,
-    }));
+    projectsReducerDispatch({
+      type: 'SELECT_PROJECT',
+      payload: id,
+    });
   }
 
   function handleDeleteSelectedProject() {
-    setProjectsState(prevState => {
-      const updatedProjects = prevState.projects.filter(project => project.id !== prevState.seletedProjectId);
-      const newState = {
-        ...prevState,
-        seletedProjectId: 0,
-        projects: updatedProjects,
-      };
-
-      update(newState);
-      return newState;
+    projectsReducerDispatch({
+      type: 'DELETE_SELECT_PROJECT',
     });
   }
 
   function handleAddProject(projectData) {
-    const projectId = uuidv4();
-    const newProject = {
-      ...projectData,
-      id: projectId,
-      tasks: [], // Ensure tasks array is initialized
-    };
-  
-    setProjectsState(prevState => {
-      const newState = {
-        ...prevState,
-        seletedProjectId: 0, // Select the newly added project
-        projects: [...prevState.projects, newProject],
-      };
-  
-      // Update the database with the new state
-      update(newState);
-      return newState;
+    projectsReducerDispatch({
+      type: 'ADD_PROJECT',
+      payload: projectData,
     });
   }
-  
 
   function handleStartAddProject() {
-    setProjectsState(prevState => ({
-      ...prevState,
-      seletedProjectId: null,
-    }));
+    projectsReducerDispatch({
+      type: 'START_ADD_PROJECT',
+    });
   }
 
   function handleCancelAddProject() {
-    setProjectsState(prevState => ({
-      ...prevState,
-      seletedProjectId: 0,
-    }));
+    projectsReducerDispatch({
+      type: 'CANCEL_ADD_PROJECT',
+    });
   }
 
-
   function handleAddTask(text, id) {
-    setProjectsState(prevState => {
-      const updatedProjects = prevState.projects.map(item => (item.id === id ? { ...item, tasks: [{ text, id: uuidv4() }, ...item.tasks] } : item));
-      return { ...prevState, projects: updatedProjects };
+    projectsReducerDispatch({
+      type: 'ADD_TASK',
+      payload: {
+        text,
+        id,
+      },
     });
   }
 
   function handleDeleteTask(projectId, taskId) {
-    setProjectsState(prevState => {
-      const updatedProjects = prevState.projects.map(item => (item.id === projectId ? { ...item, tasks: item.tasks.filter(task => task.id !== taskId) } : item));
-      return { ...prevState, projects: updatedProjects };
+    projectsReducerDispatch({
+      type: 'DELETE_TASK',
+      payload: {
+        projectId,
+        taskId,
+      },
     });
   }
 
-  const selectedProject = projectsState.projects.find(project => project.id === projectsState.seletedProjectId);
-
-  let content = (
-    <SelectedProject project={selectedProject} onDelete={handleDeleteSelectedProject} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} selectedProjectId={projectsState.seletedProjectId} />
+  const selectedProject = projectsReducerState.projects.find(
+    project => project.id === projectsReducerState.seletedProjectId
   );
 
-  if (projectsState.seletedProjectId === null) {
-    content = <NewProject onAdd={handleAddProject} onCancel={handleCancelAddProject} />;
-  } else if (projectsState.seletedProjectId === 0) {
-    content = <NoProjectSeleted onStartAddProject={handleStartAddProject} />;
+  let content = <SelectedProject />;
+
+  if (projectsReducerState.seletedProjectId === null) {
+    content = <NewProject />;
+  } else if (projectsReducerState.seletedProjectId === 0) {
+    content = <NoProjectSeleted />;
   }
 
+  const ctxValue = {
+    projects: projectsReducerState.projects,
+    project: selectedProject,
+    selectedProjectId: projectsReducerState.seletedProjectId,
+    startAddProject: handleStartAddProject,
+    selectProject: handleSelectProject,
+    handleAddProject: handleAddProject,
+    handleCancelAddProject: handleCancelAddProject,
+    handleDeleteSelectedProject: handleDeleteSelectedProject,
+    handleAddTask: handleAddTask,
+    handleDeleteTask: handleDeleteTask,
+  };
+
   return (
-    <div className='px-4 sm:px-0'>
-      <Profile />
-      <main className="h-screen my-8 flex flex-col sm:flex-row sm:gap-8">
-        <ProjectSidebar onStartAddProject={handleStartAddProject} projects={projectsState.projects} onSelectProject={handleSelectProject} selectedProjectId={projectsState.seletedProjectId} />
-        {content}
-      </main>
-    </div>
+    <ProjectsContext.Provider value={ctxValue}>
+      <div className="px-4 sm:px-0">
+        <Profile />
+        <main className="h-screen my-8 flex flex-col sm:flex-row sm:gap-8">
+          <ProjectSidebar />
+          {content}
+        </main>
+        {!loaded && (
+          <div className="fixed top-0 bottom-0 left-0 right-0 bg-black/50 flex justify-center items-center">
+            <div className="w-40 h-40 border-8 border-t-8 border-t-stone-800 border-gray-200 rounded-full animate-spin"></div>
+          </div>
+        )}
+      </div>
+    </ProjectsContext.Provider>
   );
 }
 

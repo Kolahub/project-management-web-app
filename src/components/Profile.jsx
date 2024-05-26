@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'
 import profilePic from '../assets/person-circle.svg';
 import closeImg from '../assets/x-octagon-fill.svg';
@@ -20,22 +20,42 @@ function Profile() {
 
   const navigate = useNavigate('/')
 
-  onAuthStateChanged(auth, user => {
-    if (user) {
-      const userRef = doc(db, 'UserInfo', user.uid);
-      getDoc(userRef).then(cred => {
-        setInfo(prevState => {
-          return {
-            ...prevState,
-            firstName: cred.data().firstName,
-            lastName: cred.data().lastName,
-            email: user.email,
-            imageUrl: cred.data().imageUrl,
-          };
+  useEffect(() => {
+    const unSubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userRef = doc(db, 'UserInfo', user.uid);
+          const cred = await getDoc(userRef);
+          if (cred.exists()) {
+            setInfo(prevState => ({
+              ...prevState,
+              firstName: cred.data().firstName,
+              lastName: cred.data().lastName,
+              email: user.email,
+              imageUrl: cred.data().imageUrl,
+            }));
+          } else {
+            console.error('User document does not exist');
+          }
+        } catch (error) {
+          console.error('Error fetching user document:', error);
+        }
+      } else {
+        // Handle the case where the user is not authenticated
+        setInfo({
+          firstName: '',
+          lastName: '',
+          email: '',
+          imageUrl: ''
         });
-      });
-    }
-  });
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      unSubAuth();
+    };
+  }, [auth, db]); // Ensure auth and db are stable dependencies
 
   let profileInfoCss = 'fixed top-0 bottom-0 left-0 right-0 bg-stone-600/30';
 
@@ -76,15 +96,15 @@ function Profile() {
       <div className={profileInfoCss}>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-7 bg-white">
           <button onClick={handleClose}>
-            <img src={closeImg} alt="" className="w-9 active:scale-90" />
+            <img src={closeImg} alt="" className="w-7 active:scale-90" />
           </button>
           {info.imageUrl !== '' ? (
-            <img src={info.imageUrl} alt="" className="w-72 h-72 object-cover rounded-full mx-auto" />
+            <img src={info.imageUrl} alt="" className="w-56 h-56 object-cover rounded-full mx-auto" />
           ) : (
-            <img src={profilePic} alt="" className="w-72 h-72 object-cove rounded-full mx-auto" />
+            <img src={profilePic} alt="" className="w-56 h-56 object-cover rounded-full mx-auto" />
           )}
           <input type="file" accept="image/*" onChange={e => handleImageChange(e)} className="mt-9 mb-4" />
-          <ul className="text-2xl font-semibold text-stone-700">
+          <ul className="text-xl font-semibold text-stone-700">
             <li>First name: {info.firstName}</li>
             <li>Last name: {info.lastName}</li>
             <li>Email: {info.email}</li>

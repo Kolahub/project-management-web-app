@@ -40,7 +40,7 @@ const db = getFirestore()
         lastName: signupDetails.lastName,
         email: signupDetails.email,
         imgUrl: '',
-        projectsState: {seletedProjectId: 0, projects: [], tasks: []}
+        projectsState: {seletedProjectId: 0, projects: []}
      })
      onAuthStateChanged(auth, (user) => {
         if(user) {
