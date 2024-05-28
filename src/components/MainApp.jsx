@@ -77,7 +77,7 @@ function projectsReducer(state, action) {
       item.id === action.payload.projectId
         ? {
             ...item,
-            tasks: item.tasks.filter(task => task.id !== action.payload.task),
+            tasks: item.tasks.filter(task => task.id !== action.payload.taskId),
           }
         : item
     );
